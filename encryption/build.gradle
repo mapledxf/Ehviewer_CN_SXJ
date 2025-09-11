@@ -1,0 +1,53 @@
+plugins {
+    id "com.android.library"
+}
+
+android {
+    namespace 'com.vwm.encryption'
+    compileSdk 34
+    ndkVersion '25.1.8937393'
+
+    defaultConfig {
+        minSdk 21
+        targetSdk 34
+
+        ndk {
+            abiFilters 'arm64-v8a', 'armeabi-v7a', 'x86_64'
+        }
+
+        //gradle.properties内 设置ENCRYPTION_KEY
+        def encryptionKey = project.property('ENCRYPTION_KEY')
+        externalNativeBuild {
+            cmake {
+                cppFlags "-DENCRYPTION_KEY=\\\"${encryptionKey}\\\" -std=c++11"
+
+            }
+        }
+
+        ndk {
+            moduleName "f-native-lib"
+        }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+        }
+    }
+
+    externalNativeBuild {
+        cmake {
+            path "src/main/cpp/CMakeLists.txt"
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_21
+        targetCompatibility JavaVersion.VERSION_21
+    }
+
+}
+
+dependencies {
+}

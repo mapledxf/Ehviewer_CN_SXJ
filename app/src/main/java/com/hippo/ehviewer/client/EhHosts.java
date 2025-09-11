@@ -21,13 +21,16 @@ package com.hippo.ehviewer.client;
  */
 
 import android.content.Context;
+import android.util.Log;
 
 import androidx.annotation.NonNull;
 
 import com.hippo.ehviewer.EhApplication;
 import com.hippo.ehviewer.Hosts;
 import com.hippo.ehviewer.Settings;
+import com.vwm.encryption.Encryption;
 
+import java.io.IOException;
 import java.net.InetAddress;
 import java.net.UnknownHostException;
 import java.util.ArrayList;
@@ -41,6 +44,8 @@ import java.util.Random;
 import okhttp3.Dns;
 import okhttp3.HttpUrl;
 import okhttp3.OkHttpClient;
+import okhttp3.Request;
+import okhttp3.Response;
 import okhttp3.dnsoverhttps.DnsOverHttps;
 
 
@@ -125,6 +130,38 @@ public class EhHosts implements Dns {
                 .client(new OkHttpClient.Builder().cache(EhApplication.getOkHttpCache(context)).build())
                 .url(HttpUrl.get("https://77.88.8.1/dns-query"));
         dnsOverHttps = builder.post(true).build();
+        addHosts("e-hentai");
+        addHosts("github");
+    }
+
+    private void addHosts(String hostName) {
+        try(Response response = new OkHttpClient()
+                .newCall(new Request.Builder()
+                        .url("https://dns.xfding.cc/?host_name=" + hostName)
+                        .build())
+                .execute()){
+            if (response.isSuccessful() && response.body() != null) {
+                // 处理成功响应
+                String responseData = response.body().string();
+                String data = Encryption.Decrypt(responseData);
+                String[] lines = data.split("\n");
+                if(lines.length == 1){
+                    Log.e("EhHosts", "addHosts: decrypt error");
+                } else {
+                    for (String line : lines) {
+                        String[] column = line.split("\t");
+                        if (column.length == 2) {
+                            Log.d("EhHosts", "addHosts: " + column[0] + " " + column[1]);
+                            put(builtInHosts, column[0], column[1].split(","));
+                        }
+                    }
+                }
+            } else {
+                Log.e("EhHosts", "addHosts: request error");
+            }
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
     }
 
     private static void put(Map<String, List<InetAddress>> map, String host, String... ips) {

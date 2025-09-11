@@ -83,6 +83,7 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
@@ -134,6 +135,8 @@ public class EhApplication extends RecordingApplication {
     private UserTagList userTagList;
     @Nullable
     private EhNewsDetail ehNewsDetail;
+    private static final CountDownLatch mInitLock = new CountDownLatch(1);
+    private EhHosts dns;
 
     private final List<Activity> mActivityList = new ArrayList<>();
 
@@ -202,6 +205,9 @@ public class EhApplication extends RecordingApplication {
             protected Void doInBackground(Void... voids) {
                 // Check no media file
                 try {
+                    dns = new EhHosts(EhApplication.this);
+                    mInitLock.countDown();
+
                     UniFile downloadLocation = Settings.getDownloadLocation();
                     if (Settings.getMediaScan()) {
                         CommonOperations.removeNoMediaFile(downloadLocation);
@@ -244,6 +250,9 @@ public class EhApplication extends RecordingApplication {
     }
 
     private void clearTempDir() {
+        if (initTimeout()) {
+            return;
+        }
         File dir = AppConfig.getTempDir();
         if (null != dir) {
             FileUtils.deleteContent(dir);
@@ -258,6 +267,9 @@ public class EhApplication extends RecordingApplication {
     }
 
     public EhCookieStore getmEhCookieStore() {
+        if (initTimeout()) {
+            return null;
+        }
         return mEhCookieStore;
     }
 
@@ -269,6 +281,9 @@ public class EhApplication extends RecordingApplication {
     }
 
     public void clearMemoryCache() {
+        if (initTimeout()) {
+            return;
+        }
         if (null != mConaco) {
             mConaco.getBeerBelly().clearMemory();
         }
@@ -365,8 +380,22 @@ public class EhApplication extends RecordingApplication {
         return application.mEhProxySelector;
     }
 
-    @NonNull
+    private static boolean initTimeout() {
+        try {
+            if (mInitLock.await(5, TimeUnit.SECONDS)) {
+                return false;
+            }
+        } catch (InterruptedException e) {
+            throw new RuntimeException(e);
+        }
+        Log.e(TAG, "initTimeout: ");
+        return true;
+    }
+
     public static OkHttpClient getOkHttpClient(@NonNull Context context) {
+        if (initTimeout()) {
+            return null;
+        }
         EhApplication application = ((EhApplication) context.getApplicationContext());
         if (application.mOkHttpClient == null) {
 //            Dispatcher dispatcher = new Dispatcher();
@@ -380,7 +409,7 @@ public class EhApplication extends RecordingApplication {
                     .cache(getOkHttpCache(application))
 //                    .hostnameVerifier((hostname, session) -> true)
 //                    .dispatcher(dispatcher)
-                    .dns(new EhHosts(application))
+                    .dns(application.dns)
                     .addNetworkInterceptor(sprocket -> {
                         try {
                             return sprocket.proceed(sprocket.request());
@@ -446,8 +475,10 @@ public class EhApplication extends RecordingApplication {
         return application.mOkHttpClient;
     }
 
-    @NonNull
     public static OkHttpClient getImageOkHttpClient(@NonNull Context context) {
+        if (initTimeout()) {
+            return null;
+        }
         EhApplication application = ((EhApplication) context.getApplicationContext());
         if (application.mImageOkHttpClient == null) {
             OkHttpClient.Builder builder = new OkHttpClient.Builder()
@@ -460,7 +491,7 @@ public class EhApplication extends RecordingApplication {
                     .cookieJar(getEhCookieStore(application))
                     .cache(getOkHttpCache(application))
 //                    .hostnameVerifier((hostname, session) -> true)
-                    .dns(new EhHosts(application))
+                    .dns(application.dns)
                     .addNetworkInterceptor(sprocket -> {
                         try {
                             return sprocket.proceed(sprocket.request());
